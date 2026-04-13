@@ -124,6 +124,12 @@ Use this section to document the experiments you ran. For example:
 - What happened when you added tempo or valence to the score
 - How did your system behave for different types of users
 
+Three profiles were tested against the 18-song catalog:
+
+- **High-Energy Pop** — "Sunrise City" scored 4.90 (genre + mood + energy match). "Storm Runner" (rock) appeared at rank 5 with no categorical match, scoring entirely on energy proximity — one strong number was enough to surface an otherwise wrong result.
+- **Chill Lofi** — Two songs tied at 4.92. Having 3 lofi songs in the catalog gave this profile noticeably stronger top-3 results than any other profile.
+- **Deep Intense Metal** — "Iron Will" scored 4.98, but ranks 2–5 fell back to rock, EDM, and pop because only one metal song exists. The algorithm worked correctly; the catalog was the bottleneck.
+
 ---
 
 ## Limitations and Risks
@@ -138,6 +144,10 @@ Examples:
 
 You will go deeper on this in your model card.
 
+- Genre weight (40% of max score) means a mediocre same-genre song always beats a near-perfect cross-genre match.
+- Genres with only one song in the catalog (metal, country, folk) produce weak results beyond rank 1.
+- Numerical proximity always adds a positive score, so weak candidates are never fully eliminated in a thin catalog.
+
 ---
 
 ## Reflection
@@ -150,6 +160,10 @@ Write 1 to 2 paragraphs here about what you learned:
 
 - about how recommenders turn data into predictions
 - about where bias or unfairness could show up in systems like this
+
+Building this system showed that recommenders work by reducing complex, subjective things (songs, taste) into numbers and finding the closest match. That process works well for clear-cut profiles but misses anything the numbers can't capture — tone, lyrics, cultural context.
+
+The bias lesson was the most surprising: the algorithm didn't need to be written unfairly to produce unequal results. A metal listener and a lofi listener using the exact same scoring logic get different quality recommendations simply because the catalog has more lofi songs. Unfairness can come entirely from the data, not the code.
 
 
 ---
