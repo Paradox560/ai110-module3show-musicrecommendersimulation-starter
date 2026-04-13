@@ -11,23 +11,73 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This version builds a content-based music recommender that scores every song in a catalog against a user's stated preferences (genre, mood, energy, valence, acousticness) and returns the top K matches. It is designed to be transparent — every recommendation comes with a plain-language explanation of why it was chosen.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+Real-world recommenders like Spotify or YouTube learn patterns from millions of listeners. They notice that people who like Artist A also tend to like Artist B, and they surface songs based on that collective behavior. Our version skips the crowd sourced learning and instead uses a hand-crafted content-based filter: it looks directly at the attributes of each song and compares them to a single user's stated preferences. This prioritizes transparency and control over personalization depth. What matters most in our system is genre alignment (the strongest signal), followed by mood context (e.g., "chill" for studying vs. "intense" for the gym), and then numerical proximity for energy, valence, and acousticness — rewarding songs that are close to the user's targets, not just the highest or lowest values.
 
-Some prompts to answer:
+### Song Features Used
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+Each `Song` object stores:
+- `genre` — categorical (pop, lofi, rock, ambient, jazz, synthwave, indie pop)
+- `mood` — categorical (happy, chill, intense, relaxed, focused, moody)
+- `energy` — float 0.0–1.0 (how energetic the track feels)
+- `valence` — float 0.0–1.0 (emotional positivity of the sound)
+- `acousticness` — float 0.0–1.0 (acoustic vs. electronic character)
+- `danceability` — float 0.0–1.0 (rhythmic groove)
+- `tempo_bpm` — integer (raw beats per minute)
 
-You can include a simple diagram or bullet list if helpful.
+### UserProfile Features Used
+
+Each `UserProfile` stores:
+- `favorite_genre` — the genre to match against
+- `favorite_mood` — the mood context to match against
+- `target_energy` — desired energy level (0.0–1.0)
+- `likes_acoustic` — boolean preference for acoustic vs. electronic sound
+
+### Scoring Logic
+
+```
+score = 0
++2.0  if genre matches
++1.0  if mood matches
++1.0 × (1 − |song.energy − user.target_energy|)       # proximity reward
++0.5 × (1 − |song.valence − user.target_valence|)
++0.5 × (1 − |song.acousticness − user.target_acousticness|)
+```
+
+**Maximum possible score: 5.0**
+
+Weight rationale: Genre carries 40% of the max score because cross-genre recommendations are rarely satisfying. Mood and energy are equal at 20% each — context (studying vs. gym) matters as much as physical intensity. Valence and acousticness act as tie-breakers at 10% each.
+
+### Recommendation Process
+
+1. Load all songs from `data/songs.csv`
+2. For each song, compute a score using the Scoring Rule above
+3. Sort all scored songs in descending order
+4. Return the top K songs as recommendations
+
+### Flowchart
+
+```mermaid
+flowchart TD
+    A["Input: User Preferences\n(favorite_genre, favorite_mood,\ntarget_energy, target_valence,\ntarget_acousticness)"] --> B["Load song catalog\nfrom data/songs.csv"]
+    B --> C{"For each song\nin catalog"}
+    C --> D["Score song:\n+2.0 genre match\n+1.0 mood match\n+1.0 × energy proximity\n+0.5 × valence proximity\n+0.5 × acousticness proximity"]
+    D --> E["Attach score + reasons\nto song"]
+    E --> C
+    C --> F["Sort all songs\nby score descending"]
+    F --> G["Output: Top K Recommendations\n(song title, score, reasons)"]
+```
+
+### Potential Biases
+
+- This system may over-prioritize genre — a great mood/energy match in the wrong genre will always lose to a mediocre same-genre song.
+- Genres with more songs in the catalog (lofi has 3 entries vs. 1 for metal) give users of those genres more candidates, producing better results simply due to catalog imbalance.
+- Numerical proximity scores always contribute something even for a bad match, so weak candidates are never fully eliminated — they can still surface in thin catalogs.
 
 ---
 
