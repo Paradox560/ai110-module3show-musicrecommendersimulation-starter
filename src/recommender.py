@@ -97,13 +97,60 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
 
     return (score, reasons)
 
-def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tuple[Dict, float, str]]:
-    """Scores every song with score_song, sorts by score descending, and returns the top k results."""
-    scored = []
-    for song in songs:
-        score, reasons = score_song(user_prefs, song)
-        explanation = ", ".join(reasons)
-        scored.append((song, score, explanation))
+ARTIST_REPEAT_PENALTY = 1.0
+GENRE_REPEAT_PENALTY = 0.5
 
-    scored.sort(key=lambda x: x[1], reverse=True)
-    return scored[:k]
+
+def apply_diversity_penalty(
+    song: Dict,
+    score: float,
+    reasons: List[str],
+    selected_artists: set,
+    selected_genres: set,
+) -> Tuple[float, List[str]]:
+    """Reduces a song's score if its artist or genre is already in the selected results."""
+    reasons = list(reasons)
+    if song["artist"] in selected_artists:
+        score -= ARTIST_REPEAT_PENALTY
+        reasons.append(f"artist repeat penalty (-{ARTIST_REPEAT_PENALTY:.1f})")
+    if song["genre"] in selected_genres:
+        score -= GENRE_REPEAT_PENALTY
+        reasons.append(f"genre repeat penalty (-{GENRE_REPEAT_PENALTY:.1f})")
+    return score, reasons
+
+
+def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tuple[Dict, float, str]]:
+    """
+    Scores every song, then greedily selects the top k using diversity-aware re-ranking.
+    Each round, artist/genre penalties are applied to remaining candidates whose
+    artist or genre is already represented in the selected list.
+    """
+    # Score all songs up front
+    scored = [(song, *score_song(user_prefs, song)) for song in songs]
+
+    selected = []
+    selected_artists: set = set()
+    selected_genres: set = set()
+    remaining = list(scored)
+
+    for _ in range(min(k, len(remaining))):
+        best_idx = -1
+        best_score = float("-inf")
+        best_reasons: List[str] = []
+
+        for i, (song, base_score, base_reasons) in enumerate(remaining):
+            adj_score, adj_reasons = apply_diversity_penalty(
+                song, base_score, base_reasons, selected_artists, selected_genres
+            )
+            if adj_score > best_score:
+                best_score = adj_score
+                best_idx = i
+                best_reasons = adj_reasons
+
+        song = remaining[best_idx][0]
+        selected.append((song, best_score, ", ".join(best_reasons)))
+        selected_artists.add(song["artist"])
+        selected_genres.add(song["genre"])
+        remaining.pop(best_idx)
+
+    return selected
